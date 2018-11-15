@@ -1,8 +1,9 @@
 (function(root) {
-  var _ = function() {
+  var _ = function(obj) {
     if(!(this instanceof _)){
-      return new _();
+      return new _(obj);
     }
+    this.wrap = obj;
   }
 
   // commonJS规范
@@ -16,9 +17,18 @@
     });
   }
 
-  // 数组去重
-  _.unique = function() {
-
+  _.max = function(obj) {
+    if(obj instanceof Array) {
+      return Math.max.apply(null,obj)
+    } else {
+      var max = -Infinity;
+      for(var i in obj) {
+        if(obj[i] > max) {
+          max = obj[i];
+        }
+      }
+      return max;
+    }
   }
 
   _.functions = function(obj) {
@@ -47,9 +57,11 @@
 
   _.mixin = function(obj) {
     _.each(_.functions(obj), function(name) {
-      var func = obj[name]
+      var func = obj[name];
       _.prototype[name] = function() {
-        func.call(this);
+        var args = [this.wrap];
+        Array.prototype.push.apply(args, arguments)
+        return func.apply(this, args);
       };
     });
   }
