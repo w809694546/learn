@@ -8,6 +8,7 @@
 
   var push = Array.prototype.push;
   var nativeKeys = Object.keys;
+  var objProto = Object.prototype;
 
   // commonJS规范
   typeof module !== 'undefined' && module.exports ? module.exports = _ : root._ = _;
@@ -101,7 +102,7 @@
   /**
    * @param obj 目标源
    * @param iteratee 迭代器
-   * @param content 绑定的上下文对象，传不传都行
+   * @param context 绑定的上下文对象，传不传都行
   */
   _.map = function(obj, iteratee, context) {
     var iteratee = cb(iteratee, context);
@@ -121,7 +122,7 @@
       return _.identity;
     }
     if(_.isObject(iteratee)) {
-      return _.identity;
+      return;
     }
     if(_.isFunction(iteratee)) {
       return optimizeCb(iteratee, context, args);
@@ -154,6 +155,26 @@
     var keys = [];
     for(var item in obj) {
       keys.push(obj[item]);
+    }
+    if(hasEnumBug) {
+      collect(obj, keys)
+    }
+    return keys;
+  }
+
+  // 判断是否支持for in IE9一下
+  var hasEnumBug = !{toString: null}.propertyIsEnumerable('toString');
+  // obj 的不可枚举属性
+  var noEnumProps = ['constructor', 'hasOwnProperty', 'isPrototypeOf', 'propertyIsEnumerable', 'toLocaleString', 'toString', 'valueOf']
+  var collect = function(obj, keys) {
+    var nElength = noEnumProps.length;
+    var constructor = obj.constructor;
+    var proto = constructor.prototype || objProto;
+    while(nElength--) {
+      var key = noEnumProps[nElength];
+      if(key in obj && obj[key] !== proto[key]) {
+        keys.push(key);
+      }
     }
   }
 
