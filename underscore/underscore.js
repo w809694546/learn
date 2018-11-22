@@ -135,8 +135,14 @@
       return func;
     }
     switch(args == null ? 3 : args) {
+      case 1: return function(val) {
+        return func.call(context, val);
+      }
       case 3: return function(val, index, obj) {
         return func.call(context, val, index, obj);
+      }
+      case 4: return function(memo, val, index, obj) {
+        return func.call(context, memo, val, index, obj)
       }
     }
   }
@@ -175,6 +181,53 @@
       if(key in obj && obj[key] !== proto[key]) {
         keys.push(key);
       }
+    }
+  }
+
+  var createReducer = function( dir ) {
+    var reduce = function(obj, iteratee, memo, init) {
+      var keys = !_.isArray(obj) && _.keys(obj);
+      var len = (keys || obj).length;
+      var index = dir>0?0:len-1; // 确定方向
+      if(!init) {
+        memo = obj[ keys ? keys[index] : index];
+        index+=dir;
+      }
+      for(;index>=0 && index<len;index+=dir) {
+        var currentkey = keys?keys[index] : index;
+        memo = iteratee(memo, obj[currentkey], index, obj);
+      }
+      return memo;
+    }
+    return function(obj, iteratee, memo, context) {
+      var init = arguments.length >= 3;
+      return reduce(obj, optimizeCb(iteratee, context, 4), memo, init);
+    }
+  }
+
+  _.reduce = createReducer(1); // 1 || -1 dir 从左到右累加还是从右到左累加
+
+  _.times = function(n, iteratee, context) {
+    var result = Array(Math.max(0,n));
+    iteratee = optimizeCb(iteratee, context, 1);
+    for(var i=0; i<result.length; i++) {
+      result[i] = iteratee(i);
+    }
+    return result;
+  }
+
+  // 柯里化包装器
+  _.restArgs = function(fn) { // fn为需要包装的原函数
+    return function() {
+      var len = fn.length;
+      var startIndex = len - 1; // 最后一个形参的位置
+      var args = Array(len);
+      var rest = Array.prototype.slice.call(arguments,startIndex);
+      for(var i=0;i<startIndex;i++) {
+        args[i] = arguments[i];
+      }
+      args[startIndex] = rest;
+      return fn.apply(this, args);
     }
   }
 

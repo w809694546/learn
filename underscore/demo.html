@@ -17,6 +17,23 @@
     // console.log(_.map(obj, function(val,i,obj){
     //   return val*3
     // }))
+
+    var arr = [1,2,3,4,5,6]
+    var obj = {
+      a:1,
+      b:2,
+      c:3
+    }
+    var sum = _.reduce(arr,function(memo, val, index, obj){
+      return memo+val
+    },0,obj)
+    
+    function fn(a,rest) {
+      console.log(rest)
+    }
+
+    var fnRest = _.restArgs(fn)
+    fnRest(1,2,3,4,5)
   </script>
 </body>
 </html>
