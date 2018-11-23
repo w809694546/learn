@@ -18,22 +18,52 @@
     //   return val*3
     // }))
 
-    var arr = [1,2,3,4,5,6]
-    var obj = {
-      a:1,
-      b:2,
-      c:3
-    }
-    var sum = _.reduce(arr,function(memo, val, index, obj){
-      return memo+val
-    },0,obj)
+    // var arr = [1,2,3,4,5,6]
+    // var obj = {
+    //   a:1,
+    //   b:2,
+    //   c:3
+    // }
+    // var sum = _.reduce(arr,function(memo, val, index, obj){
+    //   return memo+val
+    // },0,obj)
     
-    function fn(a,rest) {
-      console.log(rest)
-    }
+    // function fn(a,rest) {
+    //   console.log(rest)
+    // }
 
-    var fnRest = _.restArgs(fn)
-    fnRest(1,2,3,4,5)
+    // var fnRest = _.restArgs(fn)
+    // fnRest(1,2,3,4,5)
+
+    /* template */
+
+    // 解析规则
+    // var rules = {
+    //   interpolate: /\{\{([\s\S)]+?)\}\}/
+    // }
+
+    // var matcher = new RegExp([rules.interpolate.source].join('|'),'g');
+
+    // var template = 'hello, {{name}}';
+    // var data = {
+    //   name: 'Lee'
+    // }
+    // function render(template, data) {
+    //   /**
+    //    * @param matcher 与正则匹配的文本
+    //    * @param interpolate 与正则模式子表达式相匹配的文本
+    //    * @param offset 正则模式与字符串所相匹配第一个字符串的位置
+    //    * @param stringobj 匹配的字符串本身
+    //   */
+    //   return template.replace(matcher, function(match, interpolate, offset, stringobj) {
+    //     return data[interpolate];
+    //   });
+    // }
+
+    // var str = render(template, data);
+    
+
+    var c = _.template("hell0: <%= name %>");
   </script>
 </body>
 </html>

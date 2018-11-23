@@ -231,6 +231,44 @@
     }
   }
 
+  // 模板解析
+  _.templateSettings = {
+    // 执行体
+    evalute: /<%([\s\S]+?)%>/g,
+    // 插入变量
+    interpolate: /<%=([\s\S]+?)%>/g,
+    // 逃逸
+    escape: /<%-([\s\S]+?)%>/g
+  }
+
+  _.template = function(text, settings) {
+    settings = _.templateSettings;
+    var matcher = RegExp([
+      settings.escape.source,
+      settings.interpolate.source,
+      settings.evalute.source].join('|'),'g');
+    var source = "_p+='"
+    text.replace(matcher, function(match, escape, interpolate, evalute) {
+      if(evalute) {
+
+      } else if (interpolate) {
+        // 插入变量
+        source += "'+\n((_t="+interpolate+")==null?'':_t)+\n'";
+      } else if (escape) {
+
+      }
+    });
+    source += "';"
+    if(!settings.variable) source='\nwith(obj||{}){\n'+source+'}\n';
+    source="var _t,_p='';"+source+"return _p;\n"
+    console.log(source)
+    // 渲染函数
+    var render = new Function('obj', '_', source);
+    return function(data) {
+      return render.call(this, data, _)
+    }
+  }
+
   _.mixin = function(obj) {
     _.each(_.functions(obj), function(name) {
       var func = obj[name];
@@ -250,4 +288,4 @@
 
   _.mixin(_);
 
-})(this)
+})(this);
