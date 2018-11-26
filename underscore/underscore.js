@@ -274,7 +274,7 @@
         // 插入变量
         source += "'+\n((_t="+interpolate+")==null?'':_t)+\n'";
       } else if (escape) {
-        
+        source += "'+\n((_t=("+escape+")) == null?'':_t)+\n'";
       }
     });
     source += "';"
@@ -304,6 +304,16 @@
       var str = string == null ? '' : string;
       return escapeRegExp.test(str) ? str.replace(replaceRegExp, escaper) : str;
     }
+  }
+
+  // 字符串反逃逸
+  _.unescape = function(unescapeMap) {
+    var result = {};
+    var keys = _.keys(unescapeMap);
+    for(var i = 0; i < keys.length; i++) {
+      result[unescapeMap[keys[i]]] = keys[i];
+    }
+    return _.createEscaper(result);
   }
 
   _.mixin = function(obj) {
