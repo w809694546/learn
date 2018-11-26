@@ -99,6 +99,12 @@
     }
   }
 
+  _.each(['Function', 'String', 'Boolean', 'Number', 'Object'], function(name) {
+    _['is'+name] = function(obj) {
+      return toString.call(obj) === '[object '+ name +']'
+    }
+  })
+
   /**
    * @param obj 目标源
    * @param iteratee 迭代器
@@ -274,10 +280,11 @@
         // 插入变量
         source += "'+\n((_t="+interpolate+")==null?'':_t)+\n'";
       } else if (escape) {
-        source += "'+\n((_t=("+escape+")) == null?'':_t)+\n'";
+        source += "'+\n((_t=("+escape+")) == null?'':_.c(_t))+\n'";
       }
     });
     source += "';"
+    console.log(_.c)
     if(!settings.variable) {source='\nwith(obj||{}){\n'+source+'}\n'};
     source="var _t,_p='';"+source+"return _p;\n";
     // 渲染函数
@@ -296,7 +303,7 @@
     var escaper = function(key) {
       return escapeMap[key];
     }
-
+    console.dir(_)
     var exp = '(?:'+_.keys(escapeMap).join('|')+')';
     var escapeRegExp = new RegExp(exp);
     var replaceRegExp = new RegExp(exp, 'g');
@@ -316,6 +323,16 @@
     return _.createEscaper(result);
   }
 
+  var Map = {
+    '<': '&lt',
+    '>': '&gt',
+    '&': '&amp',
+    '"': '&quot',
+    "'": '&#39'
+  }
+
+  _.c = _.createEscaper(Map);
+
   _.mixin = function(obj) {
     _.each(_.functions(obj), function(name) {
       var func = obj[name];
@@ -326,12 +343,6 @@
       };
     });
   }
-
-  _.each(['Function', 'String', 'Boolean', 'Number', 'Object'], function(name) {
-    _['is'+name] = function(obj) {
-      return toString.call(obj) === '[object '+ name +']'
-    }
-  })
 
   _.mixin(_);
 
