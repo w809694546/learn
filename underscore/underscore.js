@@ -241,31 +241,68 @@
     escape: /<%-([\s\S]+?)%>/g
   }
 
+  _.extend = function() {
+    var target = arguments[0];
+    var len = arguments.length;
+    var option,key;
+    if(typeof target !== 'object') {
+      target = {};
+    }
+    for(var i=1; i<len; i++) {
+      if((option = arguments[i]) != null) {
+        for(key in option) {
+          target[key] = option[key];
+        }
+      }
+    }
+    return target
+  }
+
   _.template = function(text, settings) {
-    settings = _.templateSettings;
+    settings = _.extend({}, settings, _.templateSettings);
     var matcher = RegExp([
       settings.escape.source,
       settings.interpolate.source,
       settings.evalute.source].join('|'),'g');
-    var source = "_p+='"
-    text.replace(matcher, function(match, escape, interpolate, evalute) {
+    var source = "_p+='", index=0;
+    text.replace(matcher, function(match, escape, interpolate, evalute, offset) {
+      source += text.slice(index, offset);
+      index = offset + match.length;
       if(evalute) {
-
+        source += "';\n"+evalute+"\n_p+='";
       } else if (interpolate) {
         // 插入变量
         source += "'+\n((_t="+interpolate+")==null?'':_t)+\n'";
       } else if (escape) {
-
+        
       }
     });
     source += "';"
-    if(!settings.variable) source='\nwith(obj||{}){\n'+source+'}\n';
-    source="var _t,_p='';"+source+"return _p;\n"
-    console.log(source)
+    if(!settings.variable) {source='\nwith(obj||{}){\n'+source+'}\n'};
+    source="var _t,_p='';"+source+"return _p;\n";
     // 渲染函数
-    var render = new Function('obj', '_', source);
+    var render = new Function(settings.variable || 'obj', '_', source);
     return function(data) {
       return render.call(this, data, _)
+    }
+  }
+
+
+  // 字符串逃逸
+  /**
+   * @param escapeMap 需要逃逸的字符和实体，obj
+   *  */
+  _.createEscaper = function(escapeMap) {
+    var escaper = function(key) {
+      return escapeMap[key];
+    }
+
+    var exp = '(?:'+_.keys(escapeMap).join('|')+')';
+    var escapeRegExp = new RegExp(exp);
+    var replaceRegExp = new RegExp(exp, 'g');
+    return function(string) {
+      var str = string == null ? '' : string;
+      return escapeRegExp.test(str) ? str.replace(replaceRegExp, escaper) : str;
     }
   }
 
