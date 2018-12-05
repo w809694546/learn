@@ -105,6 +105,10 @@
   // 获取子模块的接口对象
   Module.prototype.exec = function() {
     var mod = this;
+    // 防止重复执行
+    if(mod.status >= 5) {
+      return mod.exports;
+    }
     mod.status = status.EXECUTING;
     var uri = mod.uri;
     function require(id) {
@@ -116,7 +120,14 @@
     }
 
     var factory = mod.factory;
-    var exports = factory
+    var exports = isFunction(factory) ? factory(require, mod.exports = {}, mod) : factory;
+
+    if(exports === void 0) {
+      exports = mod.exports;
+    }
+
+    mod.exports = exports;
+    return exports
   }
 
   root.define = Module.define = function(factory) {
