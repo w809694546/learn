@@ -3,7 +3,8 @@
     preload: [], // 存储模块
     cwd: document.URL.match(/[^?]*\//)[0]
   };
-  var cache = {}
+  var cache = {};
+  var anonymousMeta; // 存储定义模块时的信息
   var status = {
     FETCHED: 1, //获取模块的uri
     SAVED: 2, // 元数据存储在缓存中
@@ -14,7 +15,16 @@
   }
 
   var seajs = root.seajs = {
-    varsion: '1.0.0'
+    varsion: '1.0.0',
+    request: function(uri, callback) {
+      var node = document.createElement('script');
+      node.src = uri;
+      document.body.append(node);
+      node.onload = function() {
+        node.onload = null;
+        document.body.removeChild(node);
+      }
+    }
   }
 
   function Module(uri, deps) {
@@ -41,7 +51,7 @@
   Module.prototype.load = function() {
     var mod = this;
     mod.status = status.LOADING;
-    var uris = mod.resolve(); //获取以来模块的绝对路径
+    var uris = mod.resolve(); //获取依赖模块的绝对路径
     var len = uris.length;
     var m;
     for(var i=0; i<len; i++) {
@@ -51,6 +61,35 @@
        }
     }
     mod.onload();
+
+    var requestCache = {};
+    for(var j=0;j<len; j++) {
+      m = Module.get(uris[j]);
+      if(m.status< status.FETCHED) {
+        m.fetch(requestCache);
+      }
+    }
+
+    for(uri in requestCache) {
+      requestCache[uri]();
+    }
+  }
+
+  Module.prototype.fetch = function() {
+    var mod = this;
+    mod.status = status.FETCHED;
+    var uri = mod.uri;
+    requestCache[uri] = sendRequest;  // 发送请求注入script
+
+    function sendRequest() {
+      seajs.request(uri, onRequest)
+    }
+
+    function onRequest() {// 当前模块的id  deps  uri
+      if(anonymousMeta) {
+
+      }
+    }
   }
 
   Module.prototype.onload = function() {
@@ -58,18 +97,6 @@
     var uris = mod.resolve();
     var len = uris.length;
     mod.status = status.LOADED;
-    for(var i=0; i<len; i++) {
-      (function(j) {
-        var node = document.createElement('script');
-        node.src = uris[i];
-        document.body.appendChild(node);
-        node.onload = function() {
-          if(mod.callback) {
-            mod.callback();
-          }
-        }
-      })(i);
-    }
   }
 
   Module.prototype.resolve = function() {
@@ -83,7 +110,8 @@
   }
   Module.resolve = function(id, refUri) {
     var emitData = {id:id, refUri:refUri}
-    return emitData.uri || seajs.resolve(emitData.id, refUri);
+    return emitData.uri
+    // return emitData.uri || seajs.resolve(emitData.id, refUri);
   }
   // 入口方法
   Module.use = function(deps, callback, uri) {
@@ -131,7 +159,19 @@
   }
 
   root.define = Module.define = function(factory) {
-    Module.prototype.factory = factory;
+    var deps;
+    if(isFunction(factory)) {
+      // 调用toString
+      deps = [];
+    }
+    // 存储当前模块的信息
+    var meta = {
+      id: '',
+      uri: '',
+      deps: deps,
+      factory: factory
+    }
+    var anonymousMeta = meta;
   }
 
   var _cid = 0;
