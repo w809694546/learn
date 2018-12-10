@@ -36,7 +36,7 @@
   }
 
   var execMod = function(modName, callback) {
-    var options = modMap[modName].callback;
+    var options = modMap[modName].callback();
     modMap.exports = options;
     callback(options);
   }
@@ -54,7 +54,7 @@
     modMap[modName] = modMap[modName] || {};
     modMap[modName].deps = deps;
     modMap[modName].state = 'loaded';
-    modMap[modName].callback = callback();
+    modMap[modName].callback = callback;
   }
 
   root.requireUse = requireUse;

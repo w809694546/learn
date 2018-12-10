@@ -60,7 +60,7 @@
          m._waitings[uris[i]] = m._waitings[uris[i]] || 0;
        }
     }
-    mod.onload();
+    // mod.onload();
 
     var requestCache = {};
     for(var j=0;j<len; j++) {
@@ -75,7 +75,7 @@
     }
   }
 
-  Module.prototype.fetch = function() {
+  Module.prototype.fetch = function(requestCache) {
     var mod = this;
     mod.status = status.FETCHED;
     var uri = mod.uri;
@@ -87,9 +87,18 @@
 
     function onRequest() {// 当前模块的id  deps  uri
       if(anonymousMeta) {
-
+        mod.save(uri, anonymousMeta)
       }
+      mod.load(); //递归 检测根目录下的依赖项  是否还有依赖项
     }
+  }
+
+  Module.prototype.save = function(uri , meta) {
+    var mod = Module.get(uri);
+    mod.id = uri;
+    mod.deps = meta.deps || [];
+    mod.factory = meta.factory;
+    mod.status = status.SAVED;
   }
 
   Module.prototype.onload = function() {
@@ -195,5 +204,7 @@
     Module.preload(function() {
       Module.use(deps, callback, data.cwd+'_use_'+cid()); //虚拟根目录
     });
+
+    console.log(cache)
   }
 })(this);
