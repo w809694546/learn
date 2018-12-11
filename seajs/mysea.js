@@ -33,6 +33,7 @@
     this.exports = null;
     this.status = 0;
     this._waitings = {};  // 存贮依赖项
+    this._remain = 0; // 含有几个未加载的依赖项
   }
 
   // 模块是否存在于缓存
@@ -52,13 +53,19 @@
     var mod = this;
     mod.status = status.LOADING;
     var uris = mod.resolve(); //获取依赖模块的绝对路径
-    var len = uris.length;
+    var len = mod._remain = uris.length;
     var m;
     for(var i=0; i<len; i++) {
-       m = Module.get(uris[i]);
-       if(m.status<status.LOADING) {
-         m._waitings[uris[i]] = m._waitings[uris[i]] || 0;
-       }
+      m = Module.get(uris[i]);
+      if(m.status<status.LOADED) {
+        m._waitings[uris[i]] = m._waitings[uris[i]] || 1;
+      } else {
+        mod._remain--
+      }
+
+      if(mod._remain == 0) {
+        mod.onload();
+      }
     }
     // mod.onload();
 
@@ -106,6 +113,19 @@
     var uris = mod.resolve();
     var len = uris.length;
     mod.status = status.LOADED;
+
+    if(mod.callback) {
+      mod.callback();
+    }
+    _waitings = mod._waitings;
+    var uri, m;
+    for(uri in _waitings) {
+      m = cache[uri];
+      m._remain -= _waitings[uri];
+      if(m._remain == 0) {
+        m.onload();
+      }
+    }
   }
 
   Module.prototype.resolve = function() {
@@ -204,7 +224,5 @@
     Module.preload(function() {
       Module.use(deps, callback, data.cwd+'_use_'+cid()); //虚拟根目录
     });
-
-    console.log(cache)
   }
 })(this);
