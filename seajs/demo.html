@@ -7,11 +7,23 @@
   <title>Document</title>
 </head>
 <body>
-  
 
   <script src="./mysea.js"></script>
   <script>
-    seajs.use(['./a.js'],function(){})
+
+    seajs.config({
+      alias: {
+        'a': './a'
+      },
+      paths: {
+        'app': 'common'
+      }
+    })
+
+    seajs.use(['a'],function(a){
+      console.log(1111)
+      console.log(a)
+    })
   </script>
 </body>
 </html>

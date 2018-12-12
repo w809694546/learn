@@ -1,7 +1,8 @@
 (function(root) {
   var data = {
     preload: [], // 存储模块
-    cwd: document.URL.match(/[^?]*\//)[0]
+    cwd: document.URL.match(/[^?]*\//)[0],
+    history: {}
   };
   var cache = {};
   var anonymousMeta; // 存储定义模块时的信息
@@ -15,15 +16,17 @@
   }
 
   var seajs = root.seajs = {
-    varsion: '1.0.0',
-    request: function(uri, callback) {
-      var node = document.createElement('script');
-      node.src = uri;
-      document.body.append(node);
-      node.onload = function() {
-        node.onload = null;
-        document.body.removeChild(node);
-      }
+    varsion: '1.0.0'
+  }
+
+  seajs.request = function(uri, callback) {
+    var node = document.createElement('script');
+    node.src = uri;
+    document.body.append(node);
+    node.onload = function() {
+      node.onload = null;
+      document.body.removeChild(node);
+      callback();
     }
   }
 
@@ -46,7 +49,11 @@
   }
 
   var isFunction = function(fun) {
-    return toString.call(func) === '[object Function]'
+    return toString.call(fun) === '[object Function]'
+  }
+
+  var isString = function(str) {
+    return toString.call(str) === '[object String]'
   }
 
   Module.prototype.load = function() {
@@ -58,16 +65,15 @@
     for(var i=0; i<len; i++) {
       m = Module.get(uris[i]);
       if(m.status<status.LOADED) {
-        m._waitings[uris[i]] = m._waitings[uris[i]] || 1;
+        m._waitings[mod.uri] = m._waitings[mod.uri] || 1;
       } else {
         mod._remain--
       }
-
-      if(mod._remain == 0) {
-        mod.onload();
-      }
     }
-    // mod.onload();
+
+    if(mod._remain == 0) {
+      mod.onload(); //第一次调用load方法 并不会让他直接去调用onload方法。
+    }
 
     var requestCache = {};
     for(var j=0;j<len; j++) {
@@ -87,9 +93,8 @@
     mod.status = status.FETCHED;
     var uri = mod.uri;
     requestCache[uri] = sendRequest;  // 发送请求注入script
-
     function sendRequest() {
-      seajs.request(uri, onRequest)
+      seajs.request(uri, onRequest);
     }
 
     function onRequest() {// 当前模块的id  deps  uri
@@ -113,7 +118,6 @@
     var uris = mod.resolve();
     var len = uris.length;
     mod.status = status.LOADED;
-
     if(mod.callback) {
       mod.callback();
     }
@@ -139,8 +143,7 @@
   }
   Module.resolve = function(id, refUri) {
     var emitData = {id:id, refUri:refUri}
-    return emitData.uri
-    // return emitData.uri || seajs.resolve(emitData.id, refUri);
+    return emitData.uri || seajs.resolve(emitData.id, refUri);
   }
   // 入口方法
   Module.use = function(deps, callback, uri) {
@@ -171,15 +174,13 @@
     function require(id) {
       return Module.get(require.resolve(id)).exec();
     }
-
     require.resolve = function(id) {
       return Module.resolve(id, uri);
     }
 
     var factory = mod.factory;
     var exports = isFunction(factory) ? factory(require, mod.exports = {}, mod) : factory;
-
-    if(exports === void 0) {
+    if(exports === undefined) {
       exports = mod.exports;
     }
 
@@ -187,11 +188,27 @@
     return exports
   }
 
+  var REQUIRE_RE = /"(?:\\"|[^"])*"|'(?:\\'|[^'])*'|\/\*[\S\s]*?\*\/|\/(?:\\\/|[^\/\r\n])+\/(?=[^\/])|\/\/.*|\.\s*require|(?:^|[^$])\brequire\s*\(\s*(["'])(.+?)\1\s*\)/g
+  var SLASH_RE = /\\\\/g
+ 
+  function parseDependencies(code) {
+    var ret = []
+  
+    code.replace(SLASH_RE, "")
+        .replace(REQUIRE_RE, function(m, m1, m2) {
+          if (m2) {
+            ret.push(m2)
+          }
+        })
+  
+    return ret
+  }
+
   root.define = Module.define = function(factory) {
     var deps;
     if(isFunction(factory)) {
       // 调用toString
-      deps = [];
+      deps = parseDependencies(factory.toString());;
     }
     // 存储当前模块的信息
     var meta = {
@@ -200,7 +217,7 @@
       deps: deps,
       factory: factory
     }
-    var anonymousMeta = meta;
+    anonymousMeta = meta;
   }
 
   var _cid = 0;
@@ -211,8 +228,66 @@
   // 检测预加载
   Module.preload = function(callback) {
     var len = data.preload.length;
-    if(len === 0) {
+    if(!len) {
       callback();
+    }
+  }
+
+  function parseAlias(id) {
+    var alias = data.alias;
+    return alias && isString(alias[id]) ? alias[id] : id;
+  }
+
+  // 路径正则，不能以'/' ':'开头，结尾必须是一个'/' 后面至少一个字符
+  var path_reg = /^([^\/:]+)(\/.+)$/
+  // 检测是否有路径短名称
+  function parsePaths(id) {
+    var paths = data.paths;
+    if(paths && (m = id.match(path_reg)) && isString(paths[m[1]])) {
+      id = paths[m[1]]+m[2];
+    }
+    return id
+  }
+
+  function normalize(path) {
+    var last = path.length - 1;
+    var lastC = path.charAt(last); // 最后一个字符的值
+    return (lastC === '/' || path.substring(last-2) === '.js') ? path : path+'.js'
+  }
+
+  var dot_reg = /\/\.\//g;
+  // 规范路径
+  function replacePath(path) {
+    return path.replace(dot_reg, '/');
+  }
+
+  function addBase(id, uri) {
+    var result;
+    if(id.charAt(0) === '.') {
+      result = replacePath((uri ? uri.match(/[^?]*\//)[0] : data.cwd)+id);
+    } else {
+      result = data.cwd+id
+    }
+    return result
+  }
+
+  seajs.resolve = function(id, uri) {
+    if(!id) {
+      return ''
+    }
+    id = parseAlias(id); // 是否是别名
+    id = parsePaths(id); // 是否有路径别名 依赖模块中引包的模块路径地址
+    id = normalize(id); // 是否添加后缀
+    return addBase(id, uri); // 添加根目录
+  }
+
+  seajs.config = function(options) {
+    var cur = {};
+    for(var key in options) {
+      cur[key] = options[key];
+      data.history[key] = data.history[key] || [];
+      data.history[key].push(cur);
+      data[key] = cur[key];
     }
   }
 
