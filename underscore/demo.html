@@ -62,8 +62,25 @@
 
     // var str = render(template, data);
     
+    var obj = {
+      name: 'Lee'
+    }
+    var c = _.template("hello: <%= name %>, name: <%- value %>");
+    var p = c({name: 'Lee', value: '<a>'})
 
-    var c = _.template("hell0: <%= name %>");
+    // 需要逃逸的字符
+    // var escapeMap = {
+    //   '<': '&lt',
+    //   '>': '&gt',
+    //   '&': '&amp',
+    //   '"': '&quot',
+    //   "'": '&#39'
+    // }
+
+    // // 要逃逸的字符串
+    // var str = '<a>哈哈哈哈 &amp</a>'
+    // var es = _.unescape(escapeMap);
+    // var p = es(str)
   </script>
 </body>
 </html>
