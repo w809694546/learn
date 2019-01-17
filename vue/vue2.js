@@ -5,6 +5,30 @@
     console.error('[Vue Warn]：' + msg);
   }
 
+  function isPlainObject(obj) {
+    return toString.call(obj) === '[object Object]'
+  }
+
+  var ASSET_TYPES = [
+    'component',
+    'directive',
+    'filter'
+  ]
+
+  var LIFECYCLE_HOOKS = [
+    'beforeCreate',
+    'created',
+    'beforeMount',
+    'mounted',
+    'beforeUpdate',
+    'updated',
+    'beforeDestroy',
+    'destroyed',
+    'activated',  // 内置组件  激活keep-alive
+    'deactivated',  // 内置组件  停用keep-alive
+    'errorCaptured'
+  ]
+  var hasOwnProperty = Object.prototype.hasOwnProperty;
   var hasOwn = function(parent, key) {
     hasOwnProperty.call(parent, key);
   }
@@ -69,8 +93,8 @@
     return defaultStrats(parent, child)
   }
 
-  function mergeData(to, form) {
-    if(!form) {
+  function mergeData(to, from) {
+    if(!from) {
       return to;
     }
   }
@@ -111,11 +135,67 @@
         warn('data类型应为function');
       }
       return mergeDataOrFn(parentVal, childVal);
-    } else {  // vue的实例调用
-      return mergeInstanceDataFn(parentVal, childVal, vm)
+    }
+    return mergeDataOrFn(parentVal, childVal, vm);
+  }
+
+  function mergeHook(parentVal, childVal) {
+    return childVal ? (parentVal ? parentVal.concat(childVal) : (Array.isArray(childVal) ? childVal : [childVal])) : parentVal;
+  }
+
+  // 钩子自定义策略
+  LIFECYCLE_HOOKS.forEach(function(hook) {
+    strats[hook] = mergeHook;
+  });
+
+  function assetObjectType(key, childVal, vm) {
+    if(!isPlainObject(childVal)) {
+      warn('选项'+key+'无效，必须为Object');
     }
   }
 
+  function extend(to, from) {
+    for(var key in from) {
+      to[key] = from[key];
+    }
+    return to
+  }
+
+  function mergeAssets(parentVal, childVal, vm, key) {
+    var res = Object.create(parentVal || null);
+    if(childVal) {
+      assetObjectType(key, childVal, vm);
+      return extend(res, childVal);  // res.__proto__ == Vue.options.component
+    }
+    return res
+  }
+
+  // 资源选项  自定义策略
+  ASSET_TYPES.forEach(function(type) {
+    strats[type+'s'] = mergeAssets;
+  });
+
+  // watch选项
+  strats.watch = function(parentVal, childVal, vm ,key) {
+    if(!childVal) {
+      return Object.create(parentVal || null)
+    }
+    assetObjectType(key, childVal, vl);
+    if(!parentVal) {
+      return childVal;
+    }
+    var res = {}
+    extend(res, parentVal);
+    for(var k in childVal) {
+      var parent = res[k];  // 可能为undefined
+      var child = child[k];
+      if(parent && !Array.isArray(parent)) {
+        parent = [parent];
+      }
+      res[k] = parent ? parent.concat(child) : (Array.isArray(child) ? child : [child]);
+    }
+    return res
+  }
   // 内置标签
   var isBuiltInTag = makeMap('slot,component', true);
   var isReservedTag = function(tag) {
@@ -166,7 +246,7 @@
       // 有多少个Vue的实例
       vm._uid = uid++;
       // 选项的合并
-      mergeOptions(resolveConstructorOptions(vm.constructor), options, vm);
+      vm.$options = mergeOptions(resolveConstructorOptions(vm.constructor), options, vm);
     }
   }
 
@@ -174,8 +254,8 @@
     Vue.extend = function(extendOption) {
       extendOption = extendOption || {};
       var _this = this;
-      var Sub = function VueComponent() {
-        this._init();
+      var Sub = function VueComponent(options) {
+        this._init(options);
       }
       Sub.prototype = Object.create(_this.prototype);
       Sub.prototype.constructor = Sub;
@@ -195,7 +275,11 @@
   initExtend(Vue);
   // 全局API
   Vue.options = {
-    components: {},
+    components: {
+      keepAlive: {},
+      transition: {},
+      transitionGroup: {}
+    },
     directives: {},
     _base: Vue
   }

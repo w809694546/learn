@@ -12,21 +12,32 @@
   <script src="./vue2.js"></script>
   <script>
 
-    Vue.extend({
-      template: '<div>哈哈哈</div>',
-      data: function() {
+    // Vue.extend({
+    //   template: '<div>哈哈哈</div>',
+    //   data: function() {
 
-      }
-    })
-    new Vue({
-      el: '#app',
-      data: {
-        msg: 'hello world'
-      },
-      components: {
+    //   }
+    // })
+    // var vm = new Vue({
+    //   el: '#app',
+    //   data: {
+    //     msg: 'hello world'
+    //   },
+    //   components: {
         
+    //   },
+    //   created: function() {
+
+    //   }
+    // })
+    var componentA = {}
+    var vm = new Vue({
+      el: '#app',
+      components: {
+        'component-a': componentA
       }
     })
+    console.log(vm.$options)
   </script>
 </body>
 </html>
