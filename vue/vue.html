@@ -30,14 +30,29 @@
 
     //   }
     // })
-    var componentA = {}
-    var vm = new Vue({
-      el: '#app',
-      components: {
-        'component-a': componentA
+    // var componentA = {}
+    // var vm = new Vue({
+    //   el: '#app',
+    //   components: {
+    //     'component-a': componentA
+    //   },
+    //   props: ['my-message']
+    // })
+
+    var parent = Vue.extend({
+      template: '<div> {{message}} </div',
+      props: ['key']
+    });
+    var child = parent.extend({
+      template: '<div> {{test}} </div',
+      props: {
+        message: {
+          type: Number,
+          default: 0
+        }
       }
     })
-    console.log(vm.$options)
+    console.log(child.options)
   </script>
 </body>
 </html>

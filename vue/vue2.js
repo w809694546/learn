@@ -143,6 +143,18 @@
     return childVal ? (parentVal ? parentVal.concat(childVal) : (Array.isArray(childVal) ? childVal : [childVal])) : parentVal;
   }
 
+  strats.props = function(parentVal, childVal, vm, key) {
+    if(!parentVal) {
+      return childVal
+    }
+    var res = Object.create(null);
+    extend(res, parentVal);
+    if(childVal) {
+      extend(res, childVal)
+    }
+    return res
+  }
+
   // 钩子自定义策略
   LIFECYCLE_HOOKS.forEach(function(hook) {
     strats[hook] = mergeHook;
@@ -216,10 +228,69 @@
     return child === undefined ? parent : child;
   }
 
+  var camelizeReg = /-(\w)/g;
+  // 将中横线转换为小驼峰
+  function camelize(val) {
+    return val.replace(camelizeReg, function(_, c) {
+      return c ? c.toUpperCase() : '';
+    });
+  }
+
+  function normalizeProps(options) {
+    var props = options.props;
+    if(!props) {
+      return;
+    }
+    var i, key, name;
+    var res = {};
+    if(Array.isArray(props)) {
+      i = props.length;
+      while(i--) {
+        val = props[i];
+        if(typeof val === 'string') {
+          name = camelize(val);
+          res[name] = {
+            type: null
+          }
+        } else {
+          warn('使用数组语法时，props值必须为字符串');
+        }
+      }
+    } else if(isPlainObject(props)) {
+      for(key in props) {
+        val = props[key];
+        name = camelize(key);
+        res[name] = isPlainObject(val) ? val : {type: null, default: val}
+      }
+    } else {
+      warn('选项props无效，必须为数组或者对象s');
+    }
+    options.props = res;
+  }
+
+  function normalizeDirective(options) {
+    var dirs = options.directives;
+    if(dirs) {
+      for(var key in dirs) {
+        var def = dirs[key];
+        if(typeof def === "function") {
+          dirs[key] = {
+            bind: def,
+            update: def
+          }
+        }
+      }
+    }
+  }
+
   // 选项合并 一个或者多个选项合并
   function mergeOptions(parent, child, vm) {
     // 规范的检测
     checkComponents(child);
+    // 规范props
+    normalizeProps(child);
+    // 规范directive
+    normalizeDirective(child);
     var options = {};
     var k;
     for(k in parent) { // 默认选项
