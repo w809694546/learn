@@ -5,8 +5,53 @@
     console.error('[Vue Warn]：' + msg);
   }
 
+  var warnNonePresent = function(target, key) {
+    warn('属性或方法'+key+'未在实例对象上定义');
+  }
+
   function isPlainObject(obj) {
     return toString.call(obj) === '[object Object]'
+  }
+
+  var isObject = function(obj) {
+    return obj !== null && typeof obj === 'object';
+  }
+
+  // 响应式系统核心。将数据对象的属性转化成访问器属性  getter, setter
+  function defineReactive(obj, key, val, shallow) {
+    var dep = new Dep();
+    var property = Object.getOwnPropertyDescriptor(obj, key);
+    var getter = property && property.get;
+    var setter = property && property.set;
+    if((!getter || setter) && arguments.length === 2) {
+      val = obj[key]; // 深度观测
+    }
+    var childOb = !shallow && observe(val);
+    Object.defineProperty(obj, key, {
+      get: function() { // 依赖收集
+        var value =  getter ? getter.call(obj) : val;
+        if(Dep.target) {
+          dep.depend(); // 收集依赖
+          if(childOb) {
+            childOb.dep.depend();
+          }
+        }
+        return value;
+      },
+      set: function(newVal) { // 调用依赖
+        var value = getter ? getter.call(obj) : val;
+        if(newVal == value || (value !== value && newVal !== newVal)) {
+          return;
+        }
+        if(setter) {
+          setter.call(obj, newVal)
+        } else {
+          val = newVal;
+        }
+        childOb = !shallow && observe(val); // 深度观测
+        dep.notify()
+      }
+    });
   }
 
   var ASSET_TYPES = [
@@ -30,7 +75,7 @@
   ]
   var hasOwnProperty = Object.prototype.hasOwnProperty;
   var hasOwn = function(parent, key) {
-    hasOwnProperty.call(parent, key);
+    return hasOwnProperty.call(parent, key);
   }
 
   function resolveConstructorOptions(Con) {
@@ -79,6 +124,13 @@
       'foreignObject,g,glyph,image,line,marker,mask,missing-glyph,path,pattern,' +
       'polygon,polyline,rect,switch,symbol,text,textpath,tspan,use,view',
       true
+  );
+
+  var allowedGlobals = makeMap(
+    'Infinity,undefined,NaN,isFinite,isNaN,' +
+    'parseFloat,parseInt,decodeURI,decodeURIComponent,encodeURI,encodeURIComponent,' +
+    'Math,Number,Date,Array,Object,Boolean,String,RegExp,Map,Set,JSON,Intl,' +
+    'require' // for Webpack/Browserify
   );
 
   var config = {
@@ -144,6 +196,18 @@
   }
 
   strats.props = function(parentVal, childVal, vm, key) {
+    if(!parentVal) {
+      return childVal
+    }
+    var res = Object.create(null);
+    extend(res, parentVal);
+    if(childVal) {
+      extend(res, childVal)
+    }
+    return res
+  }
+
+  strats.computed = function(parentVal, childVal, vm, key) {
     if(!parentVal) {
       return childVal
     }
@@ -309,6 +373,214 @@
     }
     return options
   }
+  function isNative(Ctor) {
+    return typeof Ctor === 'function' && /native code/.test(Proxy.toString());
+  }
+  var hasProxy = typeof Proxy !== 'undefined' && isNative(Proxy);
+
+  var hasHandler = {
+    has: function(target, key) {
+      var has = key in target;
+      // 全局对象或者渲染函数的内置方法
+      var isAllowed = allowedGlobals(key) || (typeof key === 'string' && key.charAt(0) === '_');
+      if(!has && !isAllowed) {
+        warnNonePresent(target, key);
+      }
+      return has;
+    }
+  }
+
+  var getHandler = {
+    get: function(target, key) {
+      if(typeof key === 'string' && !(key in target)) {
+        warnNonePresent(target, key);
+      }
+      return target[key];
+    }
+  }
+
+  function initProxy(vm) {
+    if(hasProxy) {
+      var options = vm.$options;
+      // 拦截哪些操作
+      var Handlers =  options.render && options.render._withStripped ?  getHandler : hasHandler;
+      vm._renderProxy =  new Proxy(vm, Handlers);
+    } else {
+      vm._renderProxy = vm;
+    }
+  }
+
+  // 将当前实例添加到父实例的$children中，并设置自身的$parent属性指向父实例
+  function initLifeCycle(vm) {
+    var options = vm.$options;
+    // parent 父实例引用， 父组件
+    var parent = options.parent;
+    //抽象组件 1：不会出现在子父级路径上  2：不参与DOM的渲染
+    if(parent && options.sbstrat) {
+      while(parent.$options.abstract && parent.$parent) {
+        parent = options.$parent;
+      }
+      parent.$children.push(vm);
+    }
+    //设置$root  
+    vm.$root = parent ? parent.$root : vm;
+ 
+    vm.$children = []; //当前实例的子组件实例数组
+    vm.$refs = {};
+
+    vm._watcher = null;
+    vm._inactive = null;
+    vm._directInactive = false;
+    vm._isMounted = false; //是否挂载
+    vm._isDestroyed = false; //是否销毁
+    vm._isBeingDestroyed = false; //是否正在销毁
+  }
+
+  function callhook(vm, hook) {
+    var handlers = vm.$options[hook];
+    if(handlers) {
+      for(var i=0,len = handlers.length;i<len;i++) {
+        handlers[i].call(vm);
+      }
+    }
+  }
+
+  function getData(data, vm) {
+    return data.call(vm, vm);
+  }
+
+  function isReserved(key) {
+    var code = (key+'').charCodeAt(0);
+    // $ || _
+    return code === 0x24 || code === 0x5F;
+  }
+
+  var noop = function(){}
+
+  var shareProperty = {
+    enumerable: true,
+    configrable: true,
+    get: noop,
+    set: noop
+  }
+
+  function proxy(target, data, key) {
+    shareProperty.get = function() {
+      return this[data][key]; // vm._data
+    }
+    shareProperty.set = function(val) {
+      this[data][key] = val;
+    }
+    Object.defineProperty(target, key, shareProperty);
+  }
+
+  function initData(vm) {
+    var data = vm.$options.data;
+    data = vm._data = typeof data === 'function' ? getData(data, vm) : data || {};
+    if(!isPlainObject(data)) {
+      data = {};
+      warn('data选项值应该是Object');
+    }
+    var keys = Object.keys(data);
+    var methods = vm.$options.methods;
+    var props = vm.$options.props;
+    var len = keys.length;
+    while(len--) {
+      var key = keys[len];
+      if(methods && hasOwn(methods ,key)) {
+        warn('methods'+key+'选项已经定义为data的属性');
+      } else if(props && hasOwn(props ,key)) {
+        warn('props'+key+'选项已经定义为data的属性');
+      } else if (!isReserved(key)) {
+        proxy(vm, '_data', key);
+      }
+    }
+    observe(data, true);
+  }
+
+  var shouldObserve = true;
+
+  function toggleObserve(value) {
+    shouldObserve = value;
+  }
+
+  function def(obj, key, val) {
+    Object.defineProperty(obj, key, { // obj.__ob__
+      value: val,
+      enumerable: false,
+      configrable: true,
+    });
+  }
+
+  function Dep() {
+    this.subs = [];
+  }
+  Dep.target = null;
+  Dep.prototype.depend = function() {
+
+  }
+
+  Dep.prototype.addSub = function(sub) {
+    this.subs.push(sub);
+  }
+
+  Dep.prototype.notify = function() {
+    var subs = this.subs.slice;
+    for(var i=0;i<subs.length;i++) {
+      subs[i].update();
+    }
+  }
+
+  function Observe(value) {
+    this.vmCount = 0;
+    this.value = value;
+    this.dep = new Dep(); // 回调列表，存储依赖
+    //标志
+    def(value, '__ob__', this);
+    this.walk(value);
+  }
+
+  Observe.prototype.walk = function walk(obj) {
+    var keys = Object.keys(obj);
+    for(var i=0,len=keys.length;i<len;i++) {
+      defineReactive(obj, keys[i]);
+    }
+  }
+
+  function observe(value, asRootData) {
+    if(!isObject(value)) {
+      return
+    }
+    var ob;
+    if(hasOwn(value, '__ob__') && value.__ob__ instanceof Observe) {
+      ob = value.__ob__;
+    } else if(shouldObserve && (Array.isArray(value) || isPlainObject(value)) && Object.isExtensible(value) && !value._isVue) {
+      ob = new Observe(value);
+    }
+    if(ob && asRootData) {
+      ob.vmCount++;
+    }
+    return ob;
+  }
+
+  function initState(vm) {
+    var opts = vm.$options;
+    if(opts.props) {
+      initProps(vm, opts.props);
+    }
+    if(opts.methods) {
+      initMethods(vm, opts.methods);
+    }
+    if(opts.computed) {
+      initComputed(vm, opts.computed);
+    }
+    if(opts.data) {
+      initData(vm);
+    } else {
+      // 响应式系统入口
+      observe(vm._data = {}, true);
+    }
+  }
 
   var uid = 0;
   function initMixin(Vue) {
@@ -316,8 +588,13 @@
       var vm = this;
       // 有多少个Vue的实例
       vm._uid = uid++;
+      vm._isVue = true;
       // 选项的合并
       vm.$options = mergeOptions(resolveConstructorOptions(vm.constructor), options, vm);
+      initProxy(vm);
+      initLifeCycle(vm);
+      callhook(vm, 'beforeCreate');
+      initState(vm);
     }
   }
 

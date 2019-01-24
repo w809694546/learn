@@ -30,29 +30,32 @@
 
     //   }
     // })
-    // var componentA = {}
-    // var vm = new Vue({
-    //   el: '#app',
-    //   components: {
-    //     'component-a': componentA
-    //   },
-    //   props: ['my-message']
-    // })
-
-    var parent = Vue.extend({
-      template: '<div> {{message}} </div',
-      props: ['key']
-    });
-    var child = parent.extend({
-      template: '<div> {{test}} </div',
-      props: {
-        message: {
-          type: Number,
-          default: 0
+    var vm = new Vue({
+      el: '#app',
+      data: {
+        a: 1,
+        b: {
+          c: 2
         }
+      },
+      beforeCreate: function() {
+        
       }
     })
-    console.log(child.options)
+
+    // var parent = Vue.extend({
+    //   template: '<div> {{message}} </div',
+    //   props: ['key']
+    // });
+    // var child = parent.extend({
+    //   template: '<div> {{test}} </div',
+    //   props: {
+    //     message: {
+    //       type: Number,
+    //       default: 0
+    //     }
+    //   }
+    // })
   </script>
 </body>
 </html>
