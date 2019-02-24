@@ -13,6 +13,41 @@
     return toString.call(obj) === '[object Object]'
   }
 
+  var methods = ['push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse'];
+  // 代理原型
+  var cacheArrProto = Array.prototype;
+  var shell = Object.create(cacheArrProto);
+
+  methods.forEach(function(method) {
+    var cacheMethod = cacheArrProto[method];
+    def(shell, method, function() {
+      var args = [],
+      len = arguments.length;
+      while(len--) {
+        args[len] = arguments[len];
+      }
+      var result =  cacheMethod.apply(this, args);
+      var ob = this.__ob__;
+      var inserted;
+      switch(method) {
+        case 'push':
+        case 'unshift':
+        inserted = args;
+        break;
+        case 'splice':
+        inserted = args.splice(2);
+      }
+      if(inserted) {
+        // 监听新添加的数据加入响应式系统中
+        ob.observeArray(inserted);
+      }
+      ob.dep.notify();
+      return result
+    });
+  });
+
+  var arrayKeys = Object.getOwnPropertyNames(shell);
+
   var isObject = function(obj) {
     return obj !== null && typeof obj === 'object';
   }
@@ -369,7 +404,7 @@
     function mergeField(key) {
       // 以默认为优先，以用户配置为覆盖
       var result = strats[key] || defaultStrats;
-      options[key] = result(parent[key], child[key], vm, key)
+      options[key] = result(parent[key], child[key], vm, key);
     }
     return options
   }
@@ -416,7 +451,7 @@
     // parent 父实例引用， 父组件
     var parent = options.parent;
     //抽象组件 1：不会出现在子父级路径上  2：不参与DOM的渲染
-    if(parent && options.sbstrat) {
+    if(parent && options.abstract) {
       while(parent.$options.abstract && parent.$parent) {
         parent = options.$parent;
       }
@@ -498,6 +533,7 @@
     observe(data, true);
   }
 
+  var hasProto = '__proto__' in {};
   var shouldObserve = true;
 
   function toggleObserve(value) {
@@ -537,13 +573,37 @@
     this.dep = new Dep(); // 回调列表，存储依赖
     //标志
     def(value, '__ob__', this);
-    this.walk(value);
+    if(Array.isArray(value)) {
+      var augment = hasProto ? protoAugment : copyAugment;
+      augment(value, shell, arrayKeys);
+    } else {
+      this.walk(value);
+    }
+  }
+
+  // 目标源  代理对象
+  function protoAugment(target, src) {
+    target.__ptoto__ = src;
+  }
+
+  // 一个个方法来绑定
+  function copyAugment(target, src, keys) {
+    for(var i=0,len = keys.length;i<len;i++) {
+      var key = keys[i];
+      def(target, key, src[key]);
+    }
   }
 
   Observe.prototype.walk = function walk(obj) {
     var keys = Object.keys(obj);
     for(var i=0,len=keys.length;i<len;i++) {
       defineReactive(obj, keys[i]);
+    }
+  }
+
+  Observe.prototype.observeArray = function(items) {
+    for(var i = 0, j = items.length; i < j; i++) {
+      observe(items[i]);
     }
   }
 
@@ -598,6 +658,44 @@
     }
   }
 
+  function query(el) {
+    if(typeof el === 'string') {
+      var element = document.querySelector(el);
+      if(!element) {
+        warn(el+'挂载元素未找到')
+      }
+      return element
+    } else {
+      return el
+    }
+  }
+
+  function idToTemplate(id) {
+    var el = query(id);
+    return el && el.innerHTML;
+  }
+
+  function getOuterHtml(el) {
+    if(el.outerHTML) {
+      return el.outerHTML;
+    } else {
+      var con = document.createElement('div');
+      con.appendChild(el.cloneNode(true));
+      return con.innerHTML;
+    }
+  }
+
+  // Watcher观察者
+  function mountComponent() {
+    // 组件挂载的时候要做的事情
+    var updateComponent = function() {
+      //1. render  返回生成的虚拟节点
+      //2. _update 渲染函数生成的虚拟节点渲染成DOM
+    }
+    // 渲染函数的观察者对象
+    new Watcher(vm, updateComponent, noop, {}, true);
+  }
+
   function initExtend(Vue) {
     Vue.extend = function(extendOption) {
       extendOption = extendOption || {};
@@ -621,6 +719,40 @@
   }
   initMixin(Vue); // 选项规范，合并策略
   initExtend(Vue);
+  Vue.prototype.$mount = function(el) {
+    console.log(el)
+    el = el && query(el);
+    return mountComponent(this, el)
+  }
+
+  var mount = Vue.prototype.$mount; // 缓存起来
+
+  Vue.prototype.$mount = function(el) {
+    // 编译模板
+    el = el && query(el);
+    if(el === document.body || el === document.documentElement) {
+      warn(el+'不能作为挂载元素');
+    }
+    options = this.$options;
+    if(!options.render) {
+      // 自定义渲染函数  模板编译成渲染函数
+      var template = options.template;
+      if(template) {
+        if(typeof template === 'string') {
+          if(template.charAt(0) === '#') {
+            template = idToTemplate(template); // innerHTML
+          }
+        }
+      } else if(el) {
+        getOuterHtml(el);
+      }
+      if(template) {
+        var res = compileToFunctions(template);
+        options.render = res.render; //渲染函数
+      }
+    }
+    return mount.call(this, el);
+  }
   // 全局API
   Vue.options = {
     components: {
